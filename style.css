@@ -1104,3 +1104,136 @@ article.fanfic-content p {
     opacity: 0.6;
     pointer-events: none;
 }
+/* Дополнения для темной темы */
+.dark-mode {
+    --bg-primary: #1e293b;
+    --bg-secondary: #0f172a;
+    --bg-tertiary: #334155;
+    --text-primary: #f1f5f9;
+    --text-secondary: #cbd5e1;
+    --text-tertiary: #94a3b8;
+    --border-color: #475569;
+    --shadow-md: 0 4px 6px -1px rgb(0 0 0 / 0.4);
+}
+
+.dark-mode .fanfic-card,
+.dark-mode .sidebar-card,
+.dark-mode .editor-toolbar,
+.dark-mode .chapters-panel,
+.dark-mode .editor-area,
+.dark-mode .fanfic-header,
+.dark-mode .navigation-panel,
+.dark-mode .fanfic-content,
+.dark-mode .fanfic-footer,
+.dark-mode .modal-content {
+    background: var(--bg-secondary);
+    border-color: var(--border-color);
+}
+
+.dark-mode .form-input,
+.dark-mode .form-select,
+.dark-mode .editor-textarea,
+.dark-mode .chapter-dropdown {
+    background: var(--bg-tertiary);
+    color: var(--text-primary);
+    border-color: var(--border-color);
+}
+
+.dark-mode .btn-secondary {
+    background: var(--bg-tertiary);
+    color: var(--text-primary);
+    border-color: var(--border-color);
+}
+
+.dark-mode .btn-secondary:hover {
+    background: var(--border-color);
+}
+
+.dark-mode .meta-badge {
+    background: var(--bg-tertiary);
+    color: var(--text-secondary);
+    border-color: var(--border-color);
+}
+
+/* Дополнительные стили для компонентов */
+.fanfic-footer {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 1.5rem;
+    background: var(--bg-secondary);
+    border-radius: var(--radius-lg);
+    box-shadow: var(--shadow-sm);
+    border: 1px solid var(--border-color);
+    margin-top: 2rem;
+}
+
+.fanfic-stats {
+    display: flex;
+    gap: 1.5rem;
+}
+
+.fanfic-stats .stat {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    color: var(--text-secondary);
+    font-size: 0.9rem;
+}
+
+.fanfic-date {
+    color: var(--text-tertiary);
+    font-size: 0.875rem;
+}
+
+.chapter-content {
+    font-size: 1.125rem;
+    line-height: 1.8;
+    margin-top: 2rem;
+}
+
+.chapter-content p {
+    margin-bottom: 1.5rem;
+}
+
+.chapter-header {
+    padding-bottom: 1rem;
+    margin-bottom: 2rem;
+    border-bottom: 1px solid var(--border-color);
+}
+
+.btn-icon {
+    background: none;
+    border: none;
+    color: var(--text-secondary);
+    font-size: 1.2rem;
+    cursor: pointer;
+    padding: 0.5rem;
+    border-radius: var(--radius-md);
+    transition: all 0.2s ease;
+}
+
+.btn-icon:hover {
+    background: var(--bg-tertiary);
+    color: var(--text-primary);
+}
+
+/* Анимация загрузки */
+@keyframes pulse {
+    0%, 100% { opacity: 1; }
+    50% { opacity: 0.5; }
+}
+
+.loading {
+    animation: pulse 2s cubic-bezier(0.4, 0, 0.6, 1) infinite;
+}
+
+/* Стили для превью глав */
+.chapter-preview {
+    color: var(--text-tertiary);
+    font-size: 0.75rem;
+    max-width: 120px;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
