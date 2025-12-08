@@ -361,3 +361,15 @@ document.addEventListener('DOMContentLoaded', function() {
     // Инициализация
     updateChapterUI();
 });
+// ===== ПРОСТОЙ ПИНГ ДЛЯ RENDER =====
+setInterval(async () => {
+    try {
+        await fetch('/ping');
+        console.log('🔄 Ping отправлен');
+    } catch (error) {
+        console.warn('⚠️ Ping не удался');
+    }
+}, 5 * 60 * 1000);
+
+// Первый ping сразу
+fetch('/ping').catch(() => {});
