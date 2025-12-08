@@ -373,36 +373,3 @@ setInterval(async () => {
 
 // Первый ping сразу
 fetch('/ping').catch(() => {});
-// Проверка сохранения данных при отправке
-const originalSubmitFanfic = window.submitFanfic;
-window.submitFanfic = async function() {
-    console.log('📝 Отправка фанфика...');
-    const result = await originalSubmitFanfic();
-    
-    // Сохраняем в localStorage как резервную копию
-    if (result && result.fanficId) {
-        const fanficData = {
-            id: result.fanficId,
-            title: document.getElementById('fanfic-title').value,
-            author: document.getElementById('author-name').value,
-            content: document.getElementById('content-editor').value,
-            timestamp: new Date().toISOString()
-        };
-        
-        const localFanfics = JSON.parse(localStorage.getItem('fanfics_backup') || '[]');
-        localFanfics.push(fanficData);
-        localStorage.setItem('fanfics_backup', JSON.stringify(localFanfics));
-        
-        console.log('💾 Фанфик сохранен в localStorage как резервная копия');
-    }
-    
-    return result;
-};
-
-// При загрузке проверяем localStorage
-document.addEventListener('DOMContentLoaded', () => {
-    const backup = localStorage.getItem('fanfics_backup');
-    if (backup) {
-        console.log(`💾 Найдено ${JSON.parse(backup).length} фанфиков в резервной копии`);
-    }
-});
