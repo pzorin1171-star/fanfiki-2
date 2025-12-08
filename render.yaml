@@ -2,13 +2,13 @@ services:
   - type: web
     name: fanfic-portal
     env: node
-    region: frankfurt  # Можно выбрать другой регион
+    region: frankfurt
     buildCommand: npm install
     startCommand: npm start
     envVars:
       - key: NODE_ENV
         value: production
       - key: TELEGRAM_BOT_TOKEN
-        sync: false  # Устанавливается вручную в панели Render
-    healthCheckPath: /
+        sync: false
+    healthCheckPath: /ping
     autoDeploy: true
