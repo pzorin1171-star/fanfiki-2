@@ -13,10 +13,20 @@ app.use(cors());
 app.use(express.json());
 app.use(express.static(__dirname));
 
+// Маршрут для пинга (чтобы Render не отключал сервер)
+app.get('/ping', (req, res) => {
+    res.status(200).json({ 
+        status: 'ok', 
+        message: 'Сервер работает',
+        timestamp: new Date().toISOString()
+    });
+});
+
 // Инициализация файла с фанфиками
 async function initializeFanficsFile() {
     try {
         await fs.access(FANFICS_FILE);
+        console.log('Файл ff.json найден');
     } catch (error) {
         // Файл не существует, создаем с начальными данными
         const initialData = [
@@ -40,7 +50,9 @@ async function initializeFanficsFile() {
                     }
                 ],
                 status: "approved",
-                createdAt: "2023-10-15T08:30:00.000Z"
+                createdAt: "2023-10-15T08:30:00.000Z",
+                likes: 15,
+                views: 120
             },
             {
                 id: 2,
@@ -57,7 +69,9 @@ async function initializeFanficsFile() {
                     }
                 ],
                 status: "approved",
-                createdAt: "2023-10-20T14:45:00.000Z"
+                createdAt: "2023-10-20T14:45:00.000Z",
+                likes: 8,
+                views: 85
             }
         ];
         
@@ -77,19 +91,34 @@ function initializeTelegramBot() {
     if (!token) {
         console.log('⚠️ TELEGRAM_BOT_TOKEN не установлен. Бот будет работать в демо-режиме.');
         console.log('Для включения реального бота установите переменную окружения TELEGRAM_BOT_TOKEN');
-        return null;
+        
+        // Демо-режим бота
+        return {
+            sendMessage: (chatId, text, options) => {
+                console.log(`🤖 [ДЕМО-БОТ] Отправлено сообщение в чат ${chatId}: ${text}`);
+                if (options?.reply_markup) {
+                    console.log(`🤖 [ДЕМО-БОТ] Клавиатура: ${JSON.stringify(options.reply_markup)}`);
+                }
+                return Promise.resolve();
+            },
+            editMessageText: (text, options) => {
+                console.log(`🤖 [ДЕМО-БОТ] Редактировано сообщение: ${text}`);
+                return Promise.resolve();
+            },
+            answerCallbackQuery: () => Promise.resolve()
+        };
     }
     
     try {
-        const bot = new TelegramBot(token, { polling: true });
+        const realBot = new TelegramBot(token, { polling: true });
         console.log('🤖 Telegram бот успешно запущен');
         
         // Команда /start
-        bot.onText(/\/start/, (msg) => {
+        realBot.onText(/\/start/, (msg) => {
             const chatId = msg.chat.id;
             moderatorChatId = chatId;
             
-            bot.sendMessage(chatId, 
+            realBot.sendMessage(chatId, 
                 `👋 Привет, модератор! Я бот для модерации фанфиков.\n\n` +
                 `Используйте команды:\n` +
                 `/moderate - показать фанфики на модерации\n` +
@@ -99,13 +128,25 @@ function initializeTelegramBot() {
         });
         
         // Команда /moderate
-        bot.onText(/\/moderate/, async (msg) => {
+        realBot.onText(/\/moderate/, async (msg) => {
             const chatId = msg.chat.id;
             await sendPendingFanfics(chatId);
         });
         
+        // Команда /help
+        realBot.onText(/\/help/, (msg) => {
+            const chatId = msg.chat.id;
+            realBot.sendMessage(chatId,
+                `📚 Команды бота:\n\n` +
+                `/start - начать работу\n` +
+                `/moderate - просмотреть фанфики на модерации\n` +
+                `/help - помощь\n\n` +
+                `Для модерации используйте кнопки под каждым фанфиком.`
+            );
+        });
+        
         // Обработка callback-запросов
-        bot.on('callback_query', async (callbackQuery) => {
+        realBot.on('callback_query', async (callbackQuery) => {
             const chatId = callbackQuery.message.chat.id;
             const data = callbackQuery.data;
             const messageId = callbackQuery.message.message_id;
@@ -128,10 +169,10 @@ function initializeTelegramBot() {
                 await sendFanficTags(fanficId, chatId);
             }
             
-            bot.answerCallbackQuery(callbackQuery.id);
+            realBot.answerCallbackQuery(callbackQuery.id);
         });
         
-        return bot;
+        return realBot;
     } catch (error) {
         console.error('Ошибка при запуске Telegram бота:', error.message);
         return null;
@@ -158,9 +199,9 @@ async function sendPendingFanfics(chatId) {
 ✍️ Автор: ${fanfic.author}
 🏷️ Жанр: ${fanfic.genre}
 👤 Возрастная категория: ${fanfic.ageCategory}
-🏷️ Метки: ${fanfic.tags.join(', ')}
+🏷️ Метки: ${fanfic.tags?.join(', ') || 'Нет меток'}
 📅 Дата: ${new Date(fanfic.createdAt).toLocaleDateString('ru-RU')}
-📊 Количество глав: ${fanfic.chapters.length}
+📊 Количество глав: ${fanfic.chapters?.length || 0}
             `;
             
             const keyboard = {
@@ -176,7 +217,7 @@ async function sendPendingFanfics(chatId) {
                 ]
             };
             
-            if (fanfic.chapters.length > 1) {
+            if (fanfic.chapters && fanfic.chapters.length > 1) {
                 keyboard.inline_keyboard[1].push({ text: '📖 Глава 2', callback_data: `view_${fanfic.id}_1` });
             }
             
@@ -237,7 +278,7 @@ async function sendFanficChapter(fanficId, chapterIndex, chatId) {
         const fanfics = JSON.parse(data);
         const fanfic = fanfics.find(f => f.id == fanficId);
         
-        if (!fanfic || !fanfic.chapters[chapterIndex]) {
+        if (!fanfic || !fanfic.chapters || !fanfic.chapters[chapterIndex]) {
             await bot.sendMessage(chatId, '❌ Глава не найдена.');
             return;
         }
@@ -281,12 +322,17 @@ async function sendFanficTags(fanficId, chatId) {
             'Драма': '🎭',
             'Юмор': '😂',
             'Приключения': '🗺️',
-            'Романтика': '❤️',
-            'Детектив': '🕵️',
-            'Фэнтези': '🐉'
+            'Романтика': '💕',
+            'Детектив': '🔍',
+            'Фэнтези': '🧙',
+            'Ужасы': '👻',
+            'Фантастика': '🚀',
+            'АУ': '✨',
+            'Омегаверс': '🐺',
+            'Флафф': '💖'
         };
         
-        const tagsText = fanfic.tags.map(tag => {
+        const tagsText = (fanfic.tags || []).map(tag => {
             const emoji = emojiMap[tag] || '🏷️';
             return `${emoji} ${tag}`;
         }).join('\n');
@@ -310,8 +356,8 @@ ${tagsText}
 
 // Отправить новый фанфик в Telegram
 async function sendNewFanficToTelegram(fanfic) {
-    if (!bot || !moderatorChatId) {
-        console.log('⚠️ Бот не инициализирован или модератор не запустил бота командой /start');
+    if (!bot) {
+        console.log('⚠️ Бот не инициализирован');
         console.log('Фанфик сохранен, но не отправлен в Telegram');
         return;
     }
@@ -324,9 +370,9 @@ async function sendNewFanficToTelegram(fanfic) {
 ✍️ Автор: ${fanfic.author}
 🏷️ Жанр: ${fanfic.genre}
 👤 Возрастная категория: ${fanfic.ageCategory}
-🏷️ Метки: ${fanfic.tags.join(', ')}
+🏷️ Метки: ${fanfic.tags?.join(', ') || 'Нет меток'}
 📅 Дата: ${new Date(fanfic.createdAt).toLocaleDateString('ru-RU')}
-📊 Количество глав: ${fanfic.chapters.length}
+📊 Количество глав: ${fanfic.chapters?.length || 0}
         `;
         
         const keyboard = {
@@ -342,8 +388,16 @@ async function sendNewFanficToTelegram(fanfic) {
             ]
         };
         
-        if (fanfic.chapters.length > 1) {
+        if (fanfic.chapters && fanfic.chapters.length > 1) {
             keyboard.inline_keyboard[1].push({ text: '📖 Глава 2', callback_data: `view_${fanfic.id}_1` });
+        }
+        
+        // Если модератор не запустил бота, отправляем в консоль
+        if (!moderatorChatId) {
+            console.log('🤖 [ДЕМО] Новый фанфик ожидает модерации:');
+            console.log(message);
+            console.log('🤖 [ДЕМО] Для одобрения используйте PUT /api/fanfics/' + fanfic.id + '/status');
+            return;
         }
         
         await bot.sendMessage(moderatorChatId, message, { reply_markup: keyboard });
@@ -364,7 +418,40 @@ app.get('/api/fanfics', async (req, res) => {
             ? fanfics.filter(f => f.status === status)
             : fanfics;
         
+        // Увеличиваем счетчик просмотров для каждого фанфика
+        if (req.query.incrementViews === 'true') {
+            filteredFanfics.forEach(fanfic => {
+                fanfic.views = (fanfic.views || 0) + 1;
+            });
+            
+            // Сохраняем обновленные данные
+            await fs.writeFile(FANFICS_FILE, JSON.stringify(fanfics, null, 2));
+        }
+        
         res.json(filteredFanfics);
+    } catch (error) {
+        console.error('Ошибка при чтении файла:', error);
+        res.status(500).json({ error: 'Ошибка сервера' });
+    }
+});
+
+// Получить фанфик по ID
+app.get('/api/fanfics/:id', async (req, res) => {
+    try {
+        const { id } = req.params;
+        const data = await fs.readFile(FANFICS_FILE, 'utf8');
+        const fanfics = JSON.parse(data);
+        const fanfic = fanfics.find(f => f.id == id);
+        
+        if (!fanfic) {
+            return res.status(404).json({ error: 'Фанфик не найден' });
+        }
+        
+        // Увеличиваем счетчик просмотров
+        fanfic.views = (fanfic.views || 0) + 1;
+        await fs.writeFile(FANFICS_FILE, JSON.stringify(fanfics, null, 2));
+        
+        res.json(fanfic);
     } catch (error) {
         console.error('Ошибка при чтении файла:', error);
         res.status(500).json({ error: 'Ошибка сервера' });
@@ -376,8 +463,25 @@ app.post('/api/fanfics', async (req, res) => {
     try {
         const newFanfic = req.body;
         
+        // Валидация данных
+        if (!newFanfic.title || !newFanfic.author) {
+            return res.status(400).json({ error: 'Необходимо указать название и автора' });
+        }
+        
         const data = await fs.readFile(FANFICS_FILE, 'utf8');
         const fanfics = JSON.parse(data);
+        
+        // Генерируем уникальный ID
+        const maxId = fanfics.reduce((max, f) => Math.max(max, f.id || 0), 0);
+        newFanfic.id = maxId + 1;
+        newFanfic.status = 'pending';
+        newFanfic.createdAt = new Date().toISOString();
+        newFanfic.likes = 0;
+        newFanfic.views = 0;
+        
+        // Проверяем наличие обязательных полей
+        newFanfic.tags = newFanfic.tags || [];
+        newFanfic.chapters = newFanfic.chapters || [{ id: 1, title: 'Глава 1', content: '' }];
         
         fanfics.push(newFanfic);
         
@@ -387,6 +491,7 @@ app.post('/api/fanfics', async (req, res) => {
         await sendNewFanficToTelegram(newFanfic);
         
         res.status(201).json({ 
+            success: true,
             message: 'Фанфик добавлен и отправлен на модерацию', 
             id: newFanfic.id 
         });
@@ -402,6 +507,10 @@ app.put('/api/fanfics/:id/status', async (req, res) => {
         const { id } = req.params;
         const { status } = req.body;
         
+        if (!['pending', 'approved', 'rejected'].includes(status)) {
+            return res.status(400).json({ error: 'Неверный статус' });
+        }
+        
         const data = await fs.readFile(FANFICS_FILE, 'utf8');
         const fanfics = JSON.parse(data);
         
@@ -413,12 +522,69 @@ app.put('/api/fanfics/:id/status', async (req, res) => {
         
         fanfics[fanficIndex].status = status;
         fanfics[fanficIndex].moderatedAt = new Date().toISOString();
+        fanfics[fanficIndex].moderatedBy = req.body.moderatedBy || 'Администратор';
         
         await fs.writeFile(FANFICS_FILE, JSON.stringify(fanfics, null, 2));
         
-        res.json({ message: 'Статус обновлен' });
+        res.json({ 
+            success: true,
+            message: 'Статус обновлен',
+            fanfic: fanfics[fanficIndex]
+        });
     } catch (error) {
         console.error('Ошибка при обновлении статуса:', error);
+        res.status(500).json({ error: 'Ошибка сервера' });
+    }
+});
+
+// Добавить лайк
+app.post('/api/fanfics/:id/like', async (req, res) => {
+    try {
+        const { id } = req.params;
+        
+        const data = await fs.readFile(FANFICS_FILE, 'utf8');
+        const fanfics = JSON.parse(data);
+        
+        const fanficIndex = fanfics.findIndex(f => f.id == id);
+        
+        if (fanficIndex === -1) {
+            return res.status(404).json({ error: 'Фанфик не найден' });
+        }
+        
+        fanfics[fanficIndex].likes = (fanfics[fanficIndex].likes || 0) + 1;
+        
+        await fs.writeFile(FANFICS_FILE, JSON.stringify(fanfics, null, 2));
+        
+        res.json({ 
+            success: true,
+            likes: fanfics[fanficIndex].likes,
+            message: 'Лайк добавлен'
+        });
+    } catch (error) {
+        console.error('Ошибка при добавлении лайка:', error);
+        res.status(500).json({ error: 'Ошибка сервера' });
+    }
+});
+
+// Получить статистику
+app.get('/api/stats', async (req, res) => {
+    try {
+        const data = await fs.readFile(FANFICS_FILE, 'utf8');
+        const fanfics = JSON.parse(data);
+        
+        const stats = {
+            total: fanfics.length,
+            approved: fanfics.filter(f => f.status === 'approved').length,
+            pending: fanfics.filter(f => f.status === 'pending').length,
+            rejected: fanfics.filter(f => f.status === 'rejected').length,
+            totalLikes: fanfics.reduce((sum, f) => sum + (f.likes || 0), 0),
+            totalViews: fanfics.reduce((sum, f) => sum + (f.views || 0), 0),
+            uniqueAuthors: [...new Set(fanfics.map(f => f.author))].length
+        };
+        
+        res.json(stats);
+    } catch (error) {
+        console.error('Ошибка при получении статистики:', error);
         res.status(500).json({ error: 'Ошибка сервера' });
     }
 });
@@ -432,6 +598,16 @@ app.get('/', (req, res) => {
 app.listen(PORT, async () => {
     await initializeFanficsFile();
     bot = initializeTelegramBot();
-    console.log(`🚀 Сервер запущен на http://localhost:${PORT}`);
-    console.log(`📖 Фанфики загружены из ${FANFICS_FILE}`);
+    
+    console.log(`🚀 Сервер запущен на порту ${PORT}`);
+    console.log(`🌐 Откройте http://localhost:${PORT} в браузере`);
+    console.log(`📖 Данные фанфиков загружены из ${FANFICS_FILE}`);
+    console.log(`🔄 Ping endpoint доступен по адресу http://localhost:${PORT}/ping`);
+    console.log(`📊 API статистики: http://localhost:${PORT}/api/stats`);
+    console.log(`📚 API фанфиков: http://localhost:${PORT}/api/fanfics`);
+    
+    if (!process.env.TELEGRAM_BOT_TOKEN) {
+        console.log('⚠️ Telegram бот работает в демо-режиме');
+        console.log('📱 Для реальной модерации установите переменную TELEGRAM_BOT_TOKEN');
+    }
 });
